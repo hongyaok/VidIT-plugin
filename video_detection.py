@@ -92,7 +92,7 @@ class VideoDetection(foo.Operator):
     def resolve_input(self, ctx):
         inputs = types.Object()
 
-        inputs.enum(
+        inputs.file(
             "video",
             label="Video Path",
             required=True,
@@ -101,7 +101,7 @@ class VideoDetection(foo.Operator):
             accepted_file_types=[".mp4", ".avi", ".mov"],
             button_label="Browse..."
         )
-        inputs.enum(
+        inputs.file(
             "model",
             label="YOLO Model",
             required=True,
@@ -109,14 +109,14 @@ class VideoDetection(foo.Operator):
             accepted_file_types=[".pt"],
             button_label="Browse..."
         )
-        inputs.enum(
+        inputs.str(
             "classes",
-            description="Comma-separated list of classes to detect",
             required=True
         )
-        inputs.enum(
+        inputs.float(
             "confidence",
-            description="Confidence threshold for detections",
+            min=0.0,
+            max=1.0,
             required=True
         )
         return inputs
