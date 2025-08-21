@@ -1,7 +1,7 @@
 name: Video Inference Tool
 type: plugin
 author: Hong Yao
-version: 1.0.0
+version: 1.0.1
 description: "Performs inference on videos"
 fiftyone:
   version: ">=0.25.0"
