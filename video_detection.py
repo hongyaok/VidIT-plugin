@@ -118,7 +118,7 @@ class VideoDetection(foo.Operator):
             max=1.0,
             required=True
         )
-        return types.Property(inputs)
+        return types.Property(inputs, view=types.View(label="VidIT Settings"))
 
     def execute(self, ctx):
         video_path = ctx.params.get("video")
