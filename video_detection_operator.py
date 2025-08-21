@@ -88,12 +88,6 @@ class VideoDetection(foo.Operator):
             description="Run YOLO11 detection on a video and show annotated result (GPU if available)",
             icon="/assets/one.png"
         )
-    
-    def resolve_placement(self, ctx):
-        return types.Placement(
-            types.Places.SAMPLES_GRID_SECONDARY_ACTIONS,
-            types.Button(label="Video Inference"),
-        )
 
     def resolve_input(self, ctx):
         inputs = types.Object()
