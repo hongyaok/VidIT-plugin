@@ -86,6 +86,7 @@ class VideoDetection(foo.Operator):
             name="video_detection",
             label="Video Detection",
             description="Run YOLO11 detection on a video and show annotated result (GPU if available)",
+            icon="/assets/one.png"
         )
     
     def resolve_placement(self, ctx):
