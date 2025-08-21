@@ -90,46 +90,89 @@ class VideoDetection(foo.Operator):
         )
 
     def resolve_input(self, ctx):
+        """Define the operator's input form.
+
+        Notes:
+        - Keys should be simple (no spaces); these become ctx.params keys
+        - Use appropriate field helpers instead of enum() for free-form inputs
+        - File inputs use file() with accept extensions
+        """
+
         inputs = types.Object()
 
-        inputs.enum(
-            "Video Path",
-            label="Video Path",
-            description="Path to the input video file",
+        # Video file path
+        inputs.file(
+            "video_path",
+            label="Video File",
+            description="Path to the input video (.mp4/.avi/.mov)",
             required=True,
-            accepted_file_types=[".mp4", ".avi", ".mov"],
-            button_label="Browse..."
+            accept=[".mp4", ".avi", ".mov"],
         )
-        inputs.enum(
-            "Model Path",
-            label="YOLO Model",
-            description="Path to the YOLO model file",
+
+        # YOLO model weights (.pt)
+        inputs.file(
+            "model_path",
+            label="YOLO Model (.pt)",
+            description="Path to YOLO *.pt weights (YOLOv8/YOLO11)",
             required=True,
-            accepted_file_types=[".pt"],
-            button_label="Browse..."
+            accept=[".pt"],
         )
+
+        # Device selection (auto picks cuda if available)
+        device_values = ["auto", "cpu"] + (["cuda"] if torch.cuda.is_available() else [])
         inputs.enum(
-            "Classes",
-            description="Comma-separated list of classes to detect",
-            required=True
+            "device",
+            values=device_values,
+            label="Device",
+            description="Computation device",
+            default="auto",
         )
-        inputs.enum(
-            "Confidence",
-            description="Confidence threshold for detections",
-            required=True
+
+        # Classes filter (optional)
+        inputs.string(
+            "classes",
+            label="Classes",
+            description="Optional comma-separated list of class names to keep (leave blank for all)",
+            required=False,
+            default="",
         )
-        return inputs
+
+        # Confidence threshold
+        inputs.float(
+            "confidence",
+            label="Confidence Threshold",
+            description="Detection confidence threshold (0-1)",
+            required=False,
+            default=0.25,
+            min=0.0,
+            max=1.0,
+        )
+
+        return types.Property(inputs=inputs)
 
     def execute(self, ctx):
-        video_path = ctx.params.get("video")
-        model_path = ctx.params.get("model")
-        classes_str = ctx.params.get("classes", "")
+        # Retrieve parameters using the keys defined above
+        video_path = ctx.params.get("video_path")
+        model_path = ctx.params.get("model_path")
+        device_choice = ctx.params.get("device", "auto")
+        classes_str = ctx.params.get("classes", "") or ""
         conf_thres = ctx.params.get("confidence", 0.25)
+
+        # Normalize types
+        try:
+            conf_thres = float(conf_thres)
+        except Exception:
+            conf_thres = 0.25
+
         class_order = [c.strip() for c in classes_str.split(",") if c.strip()]
+
+        if device_choice == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        else:
+            device = device_choice
 
         frames, fps = extract_video_frames(video_path)
         model = YOLO(model_path)
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
         results = run_inference_on_frames(model, frames, class_order, conf_thres, device)
         drawn = draw_boxes(frames, results)
 
@@ -137,14 +180,14 @@ class VideoDetection(foo.Operator):
         out_path = os.path.join(tmpdir, "annotated.mp4")
         write_video(drawn, fps, out_path)
 
-        # Return path so a panel can load it
-        return {"output_video": out_path, "fps": fps, "frame_count": len(frames)}
+        # Return outputs; FiftyOne will display or pass to panels
+        return {"output_video": out_path, "fps": fps, "frame_count": len(frames), "device": device}
 
 class VideoPlayerPanel(foo.Panel):
     @property
     def config(self):
         return foo.PanelConfig(
-            name="VideoInferenceTool",
+            name="VideoPlayerPanel",
             label="Video Inference Tool",
             description="Displays processed video",
         )
