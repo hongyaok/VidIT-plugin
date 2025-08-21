@@ -4,9 +4,10 @@ import torch
 import tempfile
 import numpy as np
 import fiftyone as fo
+import fiftyone.operators as foo
+from fiftyone.operators import types
 from ultralytics import YOLO
 from typing import List
-from fiftyone.core.plots import Plot
 
 
 def extract_video_frames(video_path: str):
@@ -78,26 +79,45 @@ def write_video(frames: List[np.ndarray], fps: float, out_path: str):
     writer.release()
     return out_path
 
-
-class VideoDetection(fo.core.operator.Operator):
+class VideoDetection(foo.Operator):
     @property
     def config(self):
-        return fo.core.operator.OperatorConfig(
+        return foo.OperatorConfig(
             name="video_detection",
             label="Video Detection",
             description="Run YOLO11 detection on a video and show annotated result (GPU if available)",
         )
 
     def resolve_input(self, ctx):
-        return fo.core.operator.OperatorInput(
-            inputs={
-                "video": fo.core.operator.FileInput(label="Video File", description="Path to input video (.mp4)", required=True),
-                "model": fo.core.operator.FileInput(label="YOLO Model (.pt)", description="Path to a YOLO *.pt weights file (YOLOv8/YOLO11)", required=True),
-                "device": fo.core.operator.ChoiceInput(label="Device", values=["auto","cpu","cuda"], default="auto", required=True),
-                "classes": fo.core.operator.StringInput(label="Classes (comma separated)", required=False, default=""),
-                "confidence": fo.core.operator.FloatInput(label="Confidence Threshold", default=0.25, required=False),
-            }
+        inputs = types.Object()
+
+        inputs.enum(
+            "Video Path",
+            label="Video Path",
+            description="Path to the input video file",
+            required=True,
+            accepted_file_types=[".mp4", ".avi", ".mov"],
+            button_label="Browse..."
         )
+        inputs.enum(
+            "Model Path",
+            label="YOLO Model",
+            description="Path to the YOLO model file",
+            required=True,
+            accepted_file_types=[".pt"],
+            button_label="Browse..."
+        )
+        inputs.enum(
+            "Classes",
+            description="Comma-separated list of classes to detect",
+            required=True
+        )
+        inputs.enum(
+            "Confidence",
+            description="Confidence threshold for detections",
+            required=True
+        )
+        return inputs
 
     def execute(self, ctx):
         video_path = ctx.params.get("video")
@@ -119,12 +139,12 @@ class VideoDetection(fo.core.operator.Operator):
         # Return path so a panel can load it
         return {"output_video": out_path, "fps": fps, "frame_count": len(frames)}
 
-class VideoPlayerPanel(fo.core.panels.Panel):
+class VideoPlayerPanel(foo.Panel):
     @property
     def config(self):
-        return fo.core.panels.PanelConfig(
-            name="VideoPlayerPanel",
-            label="Video Player",
+        return foo.PanelConfig(
+            name="VideoInferenceTool",
+            label="Video Inference Tool",
             description="Displays processed video",
         )
 
@@ -135,7 +155,7 @@ class VideoPlayerPanel(fo.core.panels.Panel):
             if hasattr(ctx.session, "state") else None
         ) or ctx.params.get("output_video")
         if not output_video or not os.path.exists(output_video):
-            return fo.core.panels.PanelHTML(
+            return foo.PanelHTML(
                 "<p>No video available. Run Video Detection operator.</p>"
             )
         # Simple HTML5 video tag
@@ -146,4 +166,4 @@ class VideoPlayerPanel(fo.core.panels.Panel):
             Your browser does not support the video tag.
         </video>
         """
-        return fo.core.panels.PanelHTML(html)
+        return foo.PanelHTML(html)
