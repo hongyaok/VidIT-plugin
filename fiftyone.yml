@@ -7,6 +7,6 @@ fiftyone:
   version: ">=0.25.0"
 url: https://github.com/hongyaok/VidIT-plugin
 operators:
-  - VideoDetection
+  - video_detection
 panels:
   - VideoPlayerPanel
