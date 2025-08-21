@@ -1,0 +1,12 @@
+name: Video Inference Tool
+type: plugin
+author: Hong Yao
+version: 1.0.0
+description: "Performs inference on videos"
+fiftyone:
+  version: ">=0.25.0"
+url: https://github.com/hongyaok/VidIT-plugin
+operators:
+  - video_detection
+panels:
+  - VideoPlayerPanel
