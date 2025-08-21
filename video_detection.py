@@ -5,7 +5,7 @@ import tempfile
 import numpy as np
 import fiftyone as fo
 import fiftyone.operators as foo
-from fiftyone.operators import types
+import fiftyone.operators.types as types
 from ultralytics import YOLO
 from typing import List
 
@@ -93,28 +93,28 @@ class VideoDetection(foo.Operator):
         inputs = types.Object()
 
         inputs.enum(
-            "Video Path",
+            "video",
             label="Video Path",
-            description="Path to the input video file",
             required=True,
+            description="Path to the input video file",
             accepted_file_types=[".mp4", ".avi", ".mov"],
             button_label="Browse..."
         )
         inputs.enum(
-            "Model Path",
+            "model",
             label="YOLO Model",
-            description="Path to the YOLO model file",
             required=True,
+            description="Path to the YOLO model file",
             accepted_file_types=[".pt"],
             button_label="Browse..."
         )
         inputs.enum(
-            "Classes",
+            "classes",
             description="Comma-separated list of classes to detect",
             required=True
         )
         inputs.enum(
-            "Confidence",
+            "confidence",
             description="Confidence threshold for detections",
             required=True
         )
