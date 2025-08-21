@@ -97,6 +97,7 @@ class VideoDetection(foo.Operator):
             label="Video Path",
             required=True,
             description="Path to the input video file",
+            values=[],
             accepted_file_types=[".mp4", ".avi", ".mov"],
             button_label="Browse..."
         )
