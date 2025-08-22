@@ -110,10 +110,12 @@ class VideoDetection(foo.Operator):
         )
         inputs.str(
             "classes",
+            label="Classes (comma-separated)",
             required=True
         )
         inputs.float(
             "confidence",
+            label="Confidence Threshold",
             min=0.0,
             max=1.0,
             required=True
