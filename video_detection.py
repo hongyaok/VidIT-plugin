@@ -127,6 +127,7 @@ class VideoDetection(foo.Operator):
         model_path = ctx.params.get("model")
         classes_str = ctx.params.get("classes", "")
         conf_thres = ctx.params.get("confidence", 0.25)
+        print(video_path, model_path, classes_str, conf_thres)
         class_order = [c.strip() for c in classes_str.split(",") if c.strip()]
 
         frames, fps = extract_video_frames(video_path)
