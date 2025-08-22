@@ -79,6 +79,15 @@ def write_video(frames: List[np.ndarray], fps: float, out_path: str):
     writer.release()
     return out_path
 
+def _get_file_path(v):
+    if isinstance(v, str):
+        return v
+    if isinstance(v, dict):
+        return v.get("path") or v.get("filepath") or v.get("file") or v.get("abs_path")
+    if isinstance(v, (list, tuple)) and v:
+        return _get_file_path(v[0])
+    return None
+
 class VideoDetection(foo.Operator):
     @property
     def config(self):
@@ -125,8 +134,10 @@ class VideoDetection(foo.Operator):
     def execute(self, ctx):
         video_path = ctx.params.get("video")
         model_path = ctx.params.get("model")
-        classes_str = ctx.params.get("classes", "")
-        conf_thres = ctx.params.get("confidence", 0.25)
+        video_path = _get_file_path(video_path)
+        model_path = _get_file_path(model_path)
+        classes_str = str(ctx.params.get("classes", ""))
+        conf_thres = float(ctx.params.get("confidence", 0.25))
         print(video_path, model_path, classes_str, conf_thres)
         class_order = [c.strip() for c in classes_str.split(",") if c.strip()]
 
