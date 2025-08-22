@@ -80,6 +80,7 @@ def write_video(frames: List[np.ndarray], fps: float, out_path: str):
     return out_path
 
 def _get_file_path(v):
+    print(v)
     if isinstance(v, str):
         return v
     if isinstance(v, dict):
