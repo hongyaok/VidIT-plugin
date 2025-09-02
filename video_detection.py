@@ -72,7 +72,6 @@ def write_video(frames: List[np.ndarray], fps: float, out_path: str):
     if not frames:
         raise ValueError("No frames to write")
     h, w = frames[0].shape[:2]
-    # Use H.264 codec for better browser compatibility
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = cv2.VideoWriter(out_path, fourcc, fps, (w, h))
     for f in frames:
@@ -88,7 +87,7 @@ class VideoDetection(foo.Operator):
             name="video_detection",
             label="Video Detection",
             description="Run YOLO11 detection on a video and show annotated result (GPU if available)",
-            icon="/assets/icon.svg"
+            icon="/assets/one.png"
         )
 
     def resolve_input(self, ctx):
@@ -129,20 +128,12 @@ class VideoDetection(foo.Operator):
     def resolve_output(self, ctx):
         outputs = types.Object()
         
-        # Add button to open panel after execution
-        outputs.btn(
-            "open_panel",
-            label="Open Video Panel",
-            icon="play_arrow",
-            variant="contained",
-            on_click="open_video_panel",
-            params={"panel_name": "VideoPlayerPanel"}
-        )
-        
+        # Add informational outputs
         outputs.str("device_used", label="Device Used")
         outputs.int("frame_count", label="Total Frames")
         outputs.float("fps", label="Video FPS")
         outputs.str("output_video", label="Output Video Path")
+        outputs.str("panel_instruction", label="Next Step")
         
         return types.Property(outputs)
 
@@ -150,7 +141,7 @@ class VideoDetection(foo.Operator):
         video_path = ctx.params.get("video")
         model_path = ctx.params.get("model")
         
-        # Handle file path extraction more robustly
+        # Handle file path extraction
         if isinstance(video_path, dict):
             video_path = video_path.get("absolute_path") or video_path.get("filepath")
         if isinstance(model_path, dict):
@@ -162,6 +153,11 @@ class VideoDetection(foo.Operator):
         classes_str = str(ctx.params.get("classes", ""))
         conf_thres = float(ctx.params.get("confidence", 0.25))
         
+        print(f"Processing: {video_path}")
+        print(f"Model: {model_path}")
+        print(f"Classes: {classes_str}")
+        print(f"Confidence: {conf_thres}")
+        
         # Check GPU availability and report it
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         print(f"Using device: {device}")
@@ -170,45 +166,28 @@ class VideoDetection(foo.Operator):
         
         class_order = [c.strip() for c in classes_str.split(",") if c.strip()]
 
-        # Extract frames and run inference
+        # Process video
         frames, fps = extract_video_frames(video_path)
-        print(f"Extracted {len(frames)} frames from video at {fps} FPS")
+        print(f"Extracted {len(frames)} frames at {fps} FPS")
         
         model = YOLO(model_path)
-        print(f"Loaded YOLO model from {model_path}")
-        
         results = run_inference_on_frames(model, frames, class_order, conf_thres, device)
         drawn = draw_boxes(frames, results)
 
-        # Create output video with better file naming
-        tmpdir = tempfile.mkdtemp(prefix="fiftyone_vidit_")
-        video_name = os.path.basename(video_path).split('.')[0]
-        out_path = os.path.join(tmpdir, f"{video_name}_annotated.mp4")
+        # Save output video
+        tmpdir = tempfile.mkdtemp(prefix="fo_vid_")
+        out_path = os.path.join(tmpdir, "annotated.mp4")
         write_video(drawn, fps, out_path)
 
         print(f"Saved annotated video to: {out_path}")
 
-        # Store results in panel state for access by the panel
-        if not hasattr(ctx, 'panel'):
-            # Create a mock panel object to store state
-            class MockPanel:
-                def __init__(self):
-                    self.state = {}
-            ctx.panel = MockPanel()
-        
-        # Store video info in panel state
-        ctx.panel.state = {
-            "output_video": out_path,
-            "fps": fps,
-            "frame_count": len(frames),
-            "device_used": device
-        }
-
+        # Return results for the operator output and panel access
         return {
             "output_video": out_path,
             "fps": fps,
             "frame_count": len(frames),
-            "device_used": device
+            "device_used": device,
+            "panel_instruction": "Open the 'Video Inference Tool' panel to view results"
         }
 
 
@@ -216,111 +195,131 @@ class VideoPlayerPanel(foo.Panel):
     @property
     def config(self):
         return foo.PanelConfig(
-            name="VideoPlayerPanel",
-            label="Video Inference Results",
-            description="Displays processed video with detection results",
-            icon="video_library",
-            surfaces="grid modal"
+            name="VideoInferenceTool", 
+            label="Video Inference Tool",
+            description="Displays processed video results",
+            icon="video_library"
         )
-
-    def on_load(self, ctx):
-        """Initialize panel when it loads"""
-        # Initialize state if not present
-        if not hasattr(ctx.panel, 'state') or not ctx.panel.state:
-            ctx.panel.state = {
-                "output_video": None,
-                "fps": 0,
-                "frame_count": 0,
-                "device_used": "Unknown"
-            }
 
     def render(self, ctx):
-        panel = types.Object()
+        # Try to get the most recent temporary video file
+        # This is a simple approach that looks for recent video files
+        import glob
+        import time
         
-        # Get video data from panel state or params
-        output_video = None
-        fps = 0
-        frame_count = 0
-        device_used = "Unknown"
+        # Look for recent video files in temp directories
+        temp_patterns = [
+            "/tmp/fo_vid_*/annotated.mp4",
+            "/tmp/fiftyone_vidit_*/*.mp4", 
+            "/var/folders/*/fo_vid_*/annotated.mp4",  # macOS temp
+        ]
         
-        if hasattr(ctx.panel, 'state') and ctx.panel.state:
-            output_video = ctx.panel.state.get("output_video")
-            fps = ctx.panel.state.get("fps", 0)
-            frame_count = ctx.panel.state.get("frame_count", 0)
-            device_used = ctx.panel.state.get("device_used", "Unknown")
+        recent_videos = []
+        current_time = time.time()
         
-        # Also check params as fallback
-        if not output_video:
-            output_video = ctx.params.get("output_video")
-            fps = ctx.params.get("fps", 0)
-            frame_count = ctx.params.get("frame_count", 0)
-            device_used = ctx.params.get("device_used", "Unknown")
-
-        if not output_video or not os.path.exists(str(output_video)):
-            panel.md(
-                "no_video_message",
-                "## No Video Available\n\n"
-                "Please run the **Video Detection** operator first to generate an annotated video.\n\n"
-                "You can find it by pressing ` (backtick) and searching for 'Video Detection'."
-            )
-            
-            panel.btn(
-                "run_detection",
-                label="Run Video Detection",
-                icon="smart_toy",
-                variant="contained",
-                on_click="video_detection"
-            )
-            
-        else:
-            # Display video info
-            panel.md(
-                "info",
-                f"**Video Info:**\n"
-                f"- Frames: {frame_count}\n"
-                f"- FPS: {fps:.2f}\n" 
-                f"- Device: {device_used}\n"
-            )
-            
-            # Create a proper video element using FiftyOne's asset serving
-            # Convert absolute path to relative for serving
+        for pattern in temp_patterns:
             try:
-                # For security, use data URL or serve through FiftyOne's server
-                video_filename = os.path.basename(output_video)
-                panel.md(
-                    "video_info",
-                    f"**Processed Video**: {video_filename}\n\n"
-                    f"**Note**: Due to browser security restrictions, the video file has been "
-                    f"saved to: `{output_video}`\n\n"
-                    f"You can open this file directly in your video player or import it back into FiftyOne."
-                )
+                files = glob.glob(pattern)
+                for file in files:
+                    # Check if file was created in the last 30 minutes
+                    if os.path.exists(file) and (current_time - os.path.getctime(file)) < 1800:
+                        recent_videos.append((file, os.path.getctime(file)))
+            except:
+                continue
+        
+        # Sort by creation time, most recent first
+        recent_videos.sort(key=lambda x: x[1], reverse=True)
+        
+        if not recent_videos:
+            return foo.PanelHTML(
+                "<div style='padding: 20px;'>"
+                "<h3>No Video Available</h3>"
+                "<p>Please run the Video Detection operator first.</p>"
+                "<p><strong>Steps:</strong></p>"
+                "<ol>"
+                "<li>Press ` (backtick) to open operator browser</li>"
+                "<li>Search for 'Video Detection'</li>"
+                "<li>Configure your settings and click Execute</li>"
+                "<li>Return to this panel to view results</li>"
+                "</ol>"
+                "<button onclick='location.reload()' style='margin-top: 10px; padding: 8px 16px;'>"
+                "Refresh Panel"
+                "</button>"
+                "</div>"
+            )
+        
+        # Get the most recent video
+        latest_video_path, created_time = recent_videos[0]
+        
+        # Get video info
+        try:
+            cap = cv2.VideoCapture(latest_video_path)
+            if cap.isOpened():
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                cap.release()
+            else:
+                fps = 0
+                frame_count = 0
+        except:
+            fps = 0
+            frame_count = 0
+        
+        # Format creation time
+        import datetime
+        created_str = datetime.datetime.fromtimestamp(created_time).strftime("%Y-%m-%d %H:%M:%S")
+        
+        html = f"""
+        <div style="padding: 20px; font-family: Arial, sans-serif;">
+            <h2>🎬 Video Inference Results</h2>
+            
+            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+                <h3>📊 Video Statistics</h3>
+                <p><strong>📁 File:</strong> {os.path.basename(latest_video_path)}</p>
+                <p><strong>⏰ Created:</strong> {created_str}</p>
+                <p><strong>📼 Frames:</strong> {frame_count:,}</p>
+                <p><strong>🎯 FPS:</strong> {fps:.2f}</p>
+                <p><strong>📍 Location:</strong> <code>{latest_video_path}</code></p>
+            </div>
+            
+            <div style="background-color: #e8f4f8; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+                <h3>📂 Access Your Video</h3>
+                <p>Due to browser security restrictions, the video cannot be displayed directly here. 
+                Use one of these methods to view your annotated video:</p>
                 
-                # Add button to copy path to clipboard
-                panel.btn(
-                    "copy_path",
-                    label="Copy Video Path",
-                    icon="content_copy",
-                    variant="outlined",
-                    params={"path": output_video}
-                )
+                <div style="margin: 10px 0;">
+                    <button onclick="navigator.clipboard.writeText('{latest_video_path}')" 
+                            style="padding: 8px 16px; margin-right: 10px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        📋 Copy File Path
+                    </button>
+                    <button onclick="location.reload()" 
+                            style="padding: 8px 16px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        🔄 Refresh Results
+                    </button>
+                </div>
                 
-            except Exception as e:
-                panel.md("error", f"**Error loading video**: {str(e)}")
+                <h4>💡 Quick Access Options:</h4>
+                <ul style="margin: 10px 0;">
+                    <li><strong>Option 1:</strong> Copy the path above and open in your video player (VLC, QuickTime, etc.)</li>
+                    <li><strong>Option 2:</strong> Open terminal/command prompt and navigate to the file location</li>
+                    <li><strong>Option 3:</strong> Import the video into a new FiftyOne dataset for viewing</li>
+                </ul>
+            </div>
+            
+            <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px;">
+                <h3>🖥️ Command Line Access</h3>
+                <p>Open the video directly from terminal:</p>
+                <pre style="background-color: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;">
+# macOS
+open "{latest_video_path}"
 
-        # Add refresh button
-        panel.btn(
-            "refresh",
-            label="Refresh Panel",
-            icon="refresh",
-            variant="outlined"
-        )
+# Linux  
+xdg-open "{latest_video_path}"
 
-        return types.Property(panel)
-
-    def on_click(self, ctx):
-        """Handle button clicks"""
-        if ctx.params.get("copy_path"):
-            # This would copy to clipboard in a real implementation
-            path = ctx.params.get("path")
-            print(f"Video path: {path}")
-            ctx.panel.state["message"] = f"Path copied: {path}"
+# Windows
+start "{latest_video_path}"</pre>
+            </div>
+        </div>
+        """
+        
+        return foo.PanelHTML(html)
