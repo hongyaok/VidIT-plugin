@@ -79,6 +79,35 @@ def write_video(frames: List[np.ndarray], fps: float, out_path: str):
     writer.release()
     return out_path
 
+class OpenVideoPanel(foo.Operator):
+    @property
+    def config(self):
+        return foo.OperatorConfig(
+            name="open_video_panel",
+            label="Open Video Panel",
+            description="Opens the Video Inference Tool panel",
+            icon="video_library",
+        )
+
+    def resolve_placement(self, ctx):
+        # Place a button in the Samples grid header actions
+        return types.Placement(
+            types.Places.SAMPLES_GRID_SECONDARY_ACTIONS,
+            types.Button(
+                label="Open Video Panel",
+                icon="video_library",
+            ),
+        )
+
+    def execute(self, ctx):
+        # Use the builtin open_panel operator to open the panel by label
+        # The label here must match the PanelConfig.label below: "Video Inference Tool"
+        ctx.ops.open_panel(
+            name="Video Inference Tool",
+            is_active=True,
+            layout="horizontal",
+        )
+        return {"status": "opened"}
 
 class VideoDetection(foo.Operator):
     @property
