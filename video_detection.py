@@ -105,7 +105,7 @@ class OpenVideoPanel(foo.Operator):
         ctx.ops.open_panel(
             name="Video Inference Tool",
             is_active=True,
-            layout="horizontal",
+            force=True
         )
         return {"status": "opened"}
 
